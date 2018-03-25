@@ -1,0 +1,36 @@
+{
+  "name": "crypto-income",
+  "version": "0.0.1",
+  "description": "Get incomes from given wallet",
+  "main": "index.js",
+  "scripts": {
+    "start": "babel-watch index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rollingminds/crypto-income.git"
+  },
+  "keywords": [
+    "crypto",
+    "transaction",
+    "tx",
+    "income"
+  ],
+  "author": "madwiki",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rollingminds/crypto-income/issues"
+  },
+  "homepage": "https://github.com/rollingminds/crypto-income#readme",
+  "dependencies": {
+    "async": "^2.6.0",
+    "babel-core": "^6.26.0",
+    "ethereum-input-data-decoder": "0.0.3",
+    "request": "^2.85.0",
+    "web3": "^1.0.0-beta.33"
+  },
+  "devDependencies": {
+    "babel-watch": "^2.0.7",
+    "babel-preset-es2015": "^6.24.1"
+  }
+}
