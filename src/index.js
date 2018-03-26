@@ -155,3 +155,7 @@ export function getIncome({
     });
   });
 }
+
+export function getBlockNumber() {
+  return web3.eth.getBlockNumber();
+}

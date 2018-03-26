@@ -1,11 +1,13 @@
 # crypto-income
 Get incomes from given wallet
 
-## Usage
+## Get Income
 
 ### Erc20 example:
 
 ```javascript
+import { getIncome } from 'rollingminds/crypto-income';
+
 getIncome({
   walletId: '0x7dfdb02a1a......f95c3cc6abb97', // Target wallet
   startBlock: '5283836',
@@ -67,5 +69,16 @@ getIncome({
     ...
   ],
 }
+```
+
+## Get BlockNumber
+
+```javascript
+import { getBlockNumber } from 'rollingminds/crypto-income';
+
+getBlockNumber()
+  .then(blockNumber => console.log('blockNumber', blockNumber));
+
+>blockNumber 5326086
 ```
 

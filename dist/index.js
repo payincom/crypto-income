@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.getIncome = getIncome;
+exports.getBlockNumber = getBlockNumber;
 
 var _constant = require('./constant');
 
@@ -169,4 +170,8 @@ function getIncome(_ref) {
       contractAddr: contractAddr
     });
   });
+}
+
+function getBlockNumber() {
+  return web3.eth.getBlockNumber();
 }
