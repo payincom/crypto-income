@@ -2,9 +2,9 @@
   "name": "crypto-income",
   "version": "0.0.1",
   "description": "Get incomes from given wallet",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "babel-watch index.js"
+    "start": "babel-watch src/index.js || babel src --watch -d dist"
   },
   "repository": {
     "type": "git",

@@ -8,6 +8,7 @@ const web3 = new Web3(
   new Web3.providers.HttpProvider('https://api.myetherapi.com/eth')
 );
 
+
 const erc20DecimalsMap = {};
 
 export function getIncome({
