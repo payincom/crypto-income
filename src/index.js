@@ -25,7 +25,7 @@ export function getIncome({
 }) {
   let contract;
 
-  web3 = test ? web3_rop : web3_eth;
+  const web3 = test ? web3_rop : web3_eth;
 
   if (!walletId || !coinType || !startBlock || !callback) {
     return callback({ error: 'Lack of params' });
@@ -169,3 +169,4 @@ export function getBlockNumber(test) {
   const web3 = test ? web3_rop : web3_eth;
   return web3.eth.getBlockNumber();
 }
+

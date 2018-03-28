@@ -26,7 +26,9 @@ var _request2 = _interopRequireDefault(_request);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var web3 = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/eth'));
+var web3_eth = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/eth'));
+
+var web3_rop = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/rop'));
 
 var erc20DecimalsMap = {};
 
@@ -35,9 +37,12 @@ function getIncome(_ref) {
       startBlock = _ref.startBlock,
       coinType = _ref.coinType,
       callback = _ref.callback,
-      contractAddr = _ref.contractAddr;
+      contractAddr = _ref.contractAddr,
+      test = _ref.test;
 
   var contract = void 0;
+
+  var web3 = test ? web3_rop : web3_eth;
 
   if (!walletId || !coinType || !startBlock || !callback) {
     return callback({ error: 'Lack of params' });
@@ -64,7 +69,7 @@ function getIncome(_ref) {
     }
   }, function (stepCallback) {
     (0, _request2.default)({
-      url: 'https://api.etherscan.io/api?module=account&action=txlist' + ('&address=' + (coinType === 'erc20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
+      url: 'https://api' + (test ? '-ropsten' : '') + '.etherscan.io/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'erc20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
     }, function (err, res, body) {
       if (err) {
         stepCallback(err);
@@ -167,11 +172,13 @@ function getIncome(_ref) {
       startBlock: startBlock,
       coinType: coinType,
       callback: callback,
-      contractAddr: contractAddr
+      contractAddr: contractAddr,
+      testNet: testNet
     });
   });
 }
 
-function getBlockNumber() {
+function getBlockNumber(test) {
+  var web3 = test ? web3_rop : web3_eth;
   return web3.eth.getBlockNumber();
 }
