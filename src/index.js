@@ -4,8 +4,12 @@ import Web3 from 'web3';
 import async from 'async';
 import request from 'request';
 
-const web3 = new Web3(
+const web3_eth = new Web3(
   new Web3.providers.HttpProvider('https://api.myetherapi.com/eth')
+);
+
+const web3_rop = new Web3(
+  new Web3.providers.HttpProvider('https://api.myetherapi.com/rop')
 );
 
 
@@ -17,8 +21,11 @@ export function getIncome({
   coinType,
   callback,
   contractAddr,
+  test,
 }) {
   let contract;
+
+  web3 = test ? web3_rop : web3_eth;
 
   if (!walletId || !coinType || !startBlock || !callback) {
     return callback({ error: 'Lack of params' });
@@ -50,7 +57,8 @@ export function getIncome({
     },
     (stepCallback) => {
       request({
-        url: 'https://api.etherscan.io/api?module=account&action=txlist' +
+        url: `https://api${test ? '-ropsten' : ''}.etherscan.io/api` +
+        '?module=account&action=txlist' +
         `&address=${coinType === 'erc20' ? contractAddr : walletId}` +
         `&startblock=${startBlock}&endblock=999999999` +
         '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
@@ -152,10 +160,12 @@ export function getIncome({
       coinType,
       callback,
       contractAddr,
+      testNet
     });
   });
 }
 
-export function getBlockNumber() {
+export function getBlockNumber(test) {
+  const web3 = test ? web3_rop : web3_eth;
   return web3.eth.getBlockNumber();
 }
