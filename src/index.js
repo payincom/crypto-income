@@ -4,13 +4,29 @@ import Web3 from 'web3';
 import async from 'async';
 import request from 'request';
 
-const web3_eth = new Web3(
+const web3Eth = new Web3(
   new Web3.providers.HttpProvider('https://api.myetherapi.com/eth')
 );
 
-const web3_rop = new Web3(
+const web3Ropsten = new Web3(
   new Web3.providers.HttpProvider('https://api.myetherapi.com/rop')
 );
+
+const web3Rinkeby = new Web3(
+  new Web3.providers.HttpProvider('https://rinkeby.infura.io/JQBcAjrcavlNtEF7qwUE')
+);
+
+const web3Map = {
+  main: web3Eth,
+  ropsten: web3Ropsten,
+  rinkeby: web3Rinkeby,
+};
+
+const etherscanApiMap = {
+  main: 'https://api.etherscan.io',
+  ropsten: 'https://api-ropsten.etherscan.io',
+  rinkeby: 'https://api-rinkeby.etherscan.io',
+};
 
 
 const erc20DecimalsMap = {};
@@ -21,11 +37,11 @@ export function getIncome({
   coinType,
   callback,
   contractAddr,
-  test,
+  net = 'main',
 }) {
   let contract;
 
-  const web3 = test ? web3_rop : web3_eth;
+  const web3 = web3Map[net];
 
   if (!walletId || !coinType || !startBlock || !callback) {
     return callback({ error: 'Lack of params' });
@@ -57,7 +73,7 @@ export function getIncome({
     },
     (stepCallback) => {
       request({
-        url: `https://api${test ? '-ropsten' : ''}.etherscan.io/api` +
+        url: `${etherscanApiMap[net]}/api` +
         '?module=account&action=txlist' +
         `&address=${coinType === 'erc20' ? contractAddr : walletId}` +
         `&startblock=${startBlock}&endblock=999999999` +
@@ -160,13 +176,14 @@ export function getIncome({
       coinType,
       callback,
       contractAddr,
-      testNet
+      net
     });
   });
 }
 
-export function getBlockNumber(test) {
-  const web3 = test ? web3_rop : web3_eth;
+export function getBlockNumber(net = 'main') {
+  const web3 = web3Map[net];
+
   return web3.eth.getBlockNumber();
 }
 

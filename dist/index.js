@@ -26,9 +26,23 @@ var _request2 = _interopRequireDefault(_request);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var web3_eth = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/eth'));
+var web3Eth = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/eth'));
 
-var web3_rop = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/rop'));
+var web3Ropsten = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/rop'));
+
+var web3Rinkeby = new _web2.default(new _web2.default.providers.HttpProvider('https://rinkeby.infura.io/JQBcAjrcavlNtEF7qwUE'));
+
+var web3Map = {
+  main: web3Eth,
+  ropsten: web3Ropsten,
+  rinkeby: web3Rinkeby
+};
+
+var etherscanApiMap = {
+  main: 'https://api.etherscan.io',
+  ropsten: 'https://api-ropsten.etherscan.io',
+  rinkeby: 'https://api-rinkeby.etherscan.io'
+};
 
 var erc20DecimalsMap = {};
 
@@ -38,11 +52,12 @@ function getIncome(_ref) {
       coinType = _ref.coinType,
       callback = _ref.callback,
       contractAddr = _ref.contractAddr,
-      test = _ref.test;
+      _ref$net = _ref.net,
+      net = _ref$net === undefined ? 'main' : _ref$net;
 
   var contract = void 0;
 
-  var web3 = test ? web3_rop : web3_eth;
+  var web3 = web3Map[net];
 
   if (!walletId || !coinType || !startBlock || !callback) {
     return callback({ error: 'Lack of params' });
@@ -69,7 +84,7 @@ function getIncome(_ref) {
     }
   }, function (stepCallback) {
     (0, _request2.default)({
-      url: 'https://api' + (test ? '-ropsten' : '') + '.etherscan.io/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'erc20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
+      url: etherscanApiMap[net] + '/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'erc20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
     }, function (err, res, body) {
       if (err) {
         stepCallback(err);
@@ -173,12 +188,15 @@ function getIncome(_ref) {
       coinType: coinType,
       callback: callback,
       contractAddr: contractAddr,
-      testNet: testNet
+      net: net
     });
   });
 }
 
-function getBlockNumber(test) {
-  var web3 = test ? web3_rop : web3_eth;
+function getBlockNumber() {
+  var net = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'main';
+
+  var web3 = web3Map[net];
+
   return web3.eth.getBlockNumber();
 }
