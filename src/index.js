@@ -47,7 +47,7 @@ export function getIncome({
     return callback({ error: 'Lack of params' });
   }
 
-  if (coinType === 'erc20') {
+  if (coinType === 'ERC20') {
     if (!contractAddr) {
       return callback({ error: 'contractAddr is required' });
     }
@@ -56,7 +56,7 @@ export function getIncome({
 
   async.waterfall([
     (stepCallback) => {
-      if (coinType === 'erc20' && !erc20DecimalsMap[contractAddr]) {
+      if (coinType === 'ERC20' && !erc20DecimalsMap[contractAddr]) {
         contract
         .methods
         .decimals()
@@ -75,7 +75,7 @@ export function getIncome({
       request({
         url: `${etherscanApiMap[net]}/api` +
         '?module=account&action=txlist' +
-        `&address=${coinType === 'erc20' ? contractAddr : walletId}` +
+        `&address=${coinType === 'ERC20' ? contractAddr : walletId}` +
         `&startblock=${startBlock}&endblock=999999999` +
         '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
       }, (err, res, body) => {
@@ -87,7 +87,7 @@ export function getIncome({
 
         if (rawTxs && rawTxs.length > 0) {
 
-          if (coinType === 'eth') {
+          if (coinType === 'ETH') {
             const txs = rawTxs.filter(tx =>
               tx.to.toLowerCase() === walletId.toLowerCase()
             );
@@ -115,7 +115,7 @@ export function getIncome({
             } else {
               callback(null, { empty: true });
             }
-          } else if (coinType === 'erc20') {
+          } else if (coinType === 'ERC20') {
             const decoder = new InputDataDecoder(erc20Abi);
 
             const txs = rawTxs.filter(tx =>
