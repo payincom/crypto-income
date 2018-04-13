@@ -63,7 +63,7 @@ function getIncome(_ref) {
     return callback({ error: 'Lack of params' });
   }
 
-  if (coinType === 'erc20') {
+  if (coinType === 'ERC20') {
     if (!contractAddr) {
       return callback({ error: 'contractAddr is required' });
     }
@@ -71,7 +71,7 @@ function getIncome(_ref) {
   }
 
   _async2.default.waterfall([function (stepCallback) {
-    if (coinType === 'erc20' && !erc20DecimalsMap[contractAddr]) {
+    if (coinType === 'ERC20' && !erc20DecimalsMap[contractAddr]) {
       contract.methods.decimals().call(function (err, result) {
         if (err) {
           return stepCallback(err);
@@ -84,7 +84,7 @@ function getIncome(_ref) {
     }
   }, function (stepCallback) {
     (0, _request2.default)({
-      url: etherscanApiMap[net] + '/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'erc20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
+      url: etherscanApiMap[net] + '/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'ERC20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
     }, function (err, res, body) {
       if (err) {
         stepCallback(err);
@@ -94,7 +94,7 @@ function getIncome(_ref) {
 
       if (rawTxs && rawTxs.length > 0) {
 
-        if (coinType === 'eth') {
+        if (coinType === 'ETH') {
           var txs = rawTxs.filter(function (tx) {
             return tx.to.toLowerCase() === walletId.toLowerCase();
           });
@@ -125,7 +125,7 @@ function getIncome(_ref) {
           } else {
             callback(null, { empty: true });
           }
-        } else if (coinType === 'erc20') {
+        } else if (coinType === 'ERC20') {
           var decoder = new _ethereumInputDataDecoder2.default(_constant.erc20Abi);
 
           var _txs = rawTxs.filter(function (tx) {
