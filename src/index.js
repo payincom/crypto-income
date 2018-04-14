@@ -17,13 +17,13 @@ const web3Rinkeby = new Web3(
 );
 
 const web3Map = {
-  main: web3Eth,
+  mainnet: web3Eth,
   ropsten: web3Ropsten,
   rinkeby: web3Rinkeby,
 };
 
 const etherscanApiMap = {
-  main: 'https://api.etherscan.io',
+  mainnet: 'https://api.etherscan.io',
   ropsten: 'https://api-ropsten.etherscan.io',
   rinkeby: 'https://api-rinkeby.etherscan.io',
 };
@@ -37,7 +37,7 @@ export function getIncome({
   coinType,
   callback,
   contractAddr,
-  net = 'main',
+  net = 'mainnet',
 }) {
   let contract;
 
@@ -181,7 +181,7 @@ export function getIncome({
   });
 }
 
-export function getBlockNumber(net = 'main') {
+export function getBlockNumber(net = 'mainnet') {
   const web3 = web3Map[net];
 
   return web3.eth.getBlockNumber();
