@@ -33,13 +33,13 @@ var web3Ropsten = new _web2.default(new _web2.default.providers.HttpProvider('ht
 var web3Rinkeby = new _web2.default(new _web2.default.providers.HttpProvider('https://rinkeby.infura.io/JQBcAjrcavlNtEF7qwUE'));
 
 var web3Map = {
-  main: web3Eth,
+  mainnet: web3Eth,
   ropsten: web3Ropsten,
   rinkeby: web3Rinkeby
 };
 
 var etherscanApiMap = {
-  main: 'https://api.etherscan.io',
+  mainnet: 'https://api.etherscan.io',
   ropsten: 'https://api-ropsten.etherscan.io',
   rinkeby: 'https://api-rinkeby.etherscan.io'
 };
@@ -53,7 +53,7 @@ function getIncome(_ref) {
       callback = _ref.callback,
       contractAddr = _ref.contractAddr,
       _ref$net = _ref.net,
-      net = _ref$net === undefined ? 'main' : _ref$net;
+      net = _ref$net === undefined ? 'mainnet' : _ref$net;
 
   var contract = void 0;
 
@@ -194,7 +194,7 @@ function getIncome(_ref) {
 }
 
 function getBlockNumber() {
-  var net = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'main';
+  var net = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'mainnet';
 
   var web3 = web3Map[net];
 
