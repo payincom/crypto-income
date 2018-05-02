@@ -4,7 +4,8 @@
   "description": "Get incomes from given wallet",
   "main": "dist/index.js",
   "scripts": {
-    "start": "babel-watch src/index.js || babel src --watch -d dist"
+    "start": "babel-watch src/index.js",
+    "build": "babel src --watch -d dist"
   },
   "repository": {
     "type": "git",
@@ -23,10 +24,10 @@
   },
   "homepage": "https://github.com/rollingminds/crypto-income#readme",
   "dependencies": {
-    "async": "^2.6.0",
     "babel-core": "^6.26.0",
+    "bluebird": "^3.5.1",
     "ethereum-input-data-decoder": "0.0.3",
-    "request": "^2.85.0",
+    "redis": "^2.8.0",
     "web3": "^1.0.0-beta.33"
   },
   "devDependencies": {

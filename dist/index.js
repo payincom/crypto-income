@@ -3,10 +3,8 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.getIncome = getIncome;
-exports.getBlockNumber = getBlockNumber;
 
-var _constant = require('./constant');
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _ethereumInputDataDecoder = require('ethereum-input-data-decoder');
 
@@ -16,187 +14,335 @@ var _web = require('web3');
 
 var _web2 = _interopRequireDefault(_web);
 
-var _async = require('async');
+var _constant = require('./constant');
 
-var _async2 = _interopRequireDefault(_async);
+var _bluebird = require('bluebird');
 
-var _request = require('request');
+var _redis = require('redis');
 
-var _request2 = _interopRequireDefault(_request);
+var _redis2 = _interopRequireDefault(_redis);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var web3Eth = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/eth'));
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var web3Ropsten = new _web2.default(new _web2.default.providers.HttpProvider('https://api.myetherapi.com/rop'));
+var decoder = new _ethereumInputDataDecoder2.default(_constant.erc20Abi);
 
-var web3Rinkeby = new _web2.default(new _web2.default.providers.HttpProvider('https://rinkeby.infura.io/JQBcAjrcavlNtEF7qwUE'));
+var $r = _redis2.default.createClient();
 
-var web3Map = {
-  mainnet: web3Eth,
-  ropsten: web3Ropsten,
-  rinkeby: web3Rinkeby
-};
+$r.on('error', function (err) {
+  console.log('Error ' + err);
+});
 
-var etherscanApiMap = {
-  mainnet: 'https://api.etherscan.io',
-  ropsten: 'https://api-ropsten.etherscan.io',
-  rinkeby: 'https://api-rinkeby.etherscan.io'
-};
+(0, _bluebird.promisifyAll)(_redis2.default.RedisClient.prototype);
+(0, _bluebird.promisifyAll)(_redis2.default.Multi.prototype);
 
-var erc20DecimalsMap = {};
-
-function getIncome(_ref) {
-  var walletId = _ref.walletId,
-      startBlock = _ref.startBlock,
-      coinType = _ref.coinType,
-      callback = _ref.callback,
-      contractAddr = _ref.contractAddr,
-      _ref$net = _ref.net,
-      net = _ref$net === undefined ? 'mainnet' : _ref$net;
-
-  var contract = void 0;
-
-  var web3 = web3Map[net];
-
-  if (!walletId || !coinType || !startBlock || !callback) {
-    return callback({ error: 'Lack of params' });
+var CryptoIncome = function () {
+  function CryptoIncome() {
+    _classCallCheck(this, CryptoIncome);
   }
 
-  if (coinType === 'ERC20') {
-    if (!contractAddr) {
-      return callback({ error: 'contractAddr is required' });
-    }
-    contract = new web3.eth.Contract(_constant.erc20Abi, contractAddr);
-  }
+  _createClass(CryptoIncome, [{
+    key: 'init',
+    value: async function init(_ref) {
+      var ETHnet = _ref.ETHnet,
+          startBlockNum = _ref.startBlockNum,
+          fillingReqQuantity = _ref.fillingReqQuantity,
+          incomeCallback = _ref.incomeCallback,
+          pendingCallback = _ref.pendingCallback;
 
-  _async2.default.waterfall([function (stepCallback) {
-    if (coinType === 'ERC20' && !erc20DecimalsMap[contractAddr]) {
-      contract.methods.decimals().call(function (err, result) {
-        if (err) {
-          return stepCallback(err);
-        }
-        erc20DecimalsMap[contractAddr] = Number(result);
-        stepCallback();
-      });
-    } else {
-      stepCallback();
-    }
-  }, function (stepCallback) {
-    (0, _request2.default)({
-      url: etherscanApiMap[net] + '/api' + '?module=account&action=txlist' + ('&address=' + (coinType === 'ERC20' ? contractAddr : walletId)) + ('&startblock=' + startBlock + '&endblock=999999999') + '&sort=desc&apikey=AXQE6T8J5F4ZD2QDYWTUJFDSSK5UQUUGSN'
-    }, function (err, res, body) {
-      if (err) {
-        stepCallback(err);
+      this.web3 = new _web2.default(new _web2.default.providers.WebsocketProvider(ETHnet));
+      this.fillingReqQuantity = fillingReqQuantity;
+      this.incomeCallback = incomeCallback;
+      this.pendingCallback = pendingCallback;
+      if (!(await $r.lindexAsync('scannedRanges', 0))) {
+        await $r.lpushAsync('scannedRanges', JSON.stringify({
+          start: startBlockNum - 1,
+          end: startBlockNum - 1
+        }));
       }
-      var bodyObj = JSON.parse(body);
-      var rawTxs = bodyObj.result;
+      this.subscribeNewBlocks();
+      this.subscribePendingTx();
+      this.fillMissingBlocks();
+    }
+  }, {
+    key: 'subscribePendingTx',
+    value: function subscribePendingTx() {
+      var _this = this;
 
-      if (rawTxs && rawTxs.length > 0) {
+      this.web3.eth.subscribe('pendingTransactions', function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }).on('data', async function (txHash) {
+        // console.log('pendingTransaction', txHash);
+        var watchList = await $r.smembersAsync('watchList');
+        var tx = await _this.web3.eth.getTransaction(txHash);
 
-        if (coinType === 'ETH') {
-          var txs = rawTxs.filter(function (tx) {
-            return tx.to.toLowerCase() === walletId.toLowerCase();
-          });
+        if (tx) {
+          var _watchTransaction = _this.watchTransaction({
+            tx: tx,
+            watchList: watchList
+          }),
+              resultTx = _watchTransaction.resultTx;
 
-          if (txs.length > 0) {
-            var totalValue = txs.reduce(function (value, tx) {
-              return value + Number(tx.value);
-            }, 0);
-            var currentBlock = txs[0].blockNumber;
-            var minConfirmations = Number(txs[0].confirmations);
-
-            callback(null, {
-              totalValue: totalValue,
-              currentBlock: currentBlock,
-              minConfirmations: minConfirmations,
-              decimals: _constant.ethDecimals,
-              txs: txs.map(function (tx) {
-                return {
-                  hash: tx.hash,
-                  from: tx.from,
-                  to: tx.to,
-                  blockNumber: tx.blockNumber,
-                  timeStamp: tx.timeStamp,
-                  confirmations: tx.confirmations
-                };
-              })
-            });
-          } else {
-            callback(null, { empty: true });
+          if (resultTx) {
+            _this.pendingCallback(resultTx);
           }
-        } else if (coinType === 'ERC20') {
-          var decoder = new _ethereumInputDataDecoder2.default(_constant.erc20Abi);
+        }
+      });
+    }
+  }, {
+    key: 'subscribeNewBlocks',
+    value: function subscribeNewBlocks() {
+      var _this2 = this;
 
-          var _txs = rawTxs.filter(function (tx) {
-            return tx.to.toLowerCase() === contractAddr.toLowerCase();
-          }).map(function (tx) {
-            var inputData = decoder.decodeData(tx.input);
+      this.web3.eth.subscribe('newBlockHeaders', function (error) {
+        if (error) {
+          console.log(error);
+        }
+      }).on('data', async function (blockHeader) {
+        if (blockHeader) {
+          var latestRange = JSON.parse((await $r.lindexAsync('scannedRanges', 0)));
 
-            return inputData.name === 'transfer' ? {
+          _this2.scanETHBlock(blockHeader.number, async function () {
+            console.log('blockNumber', blockHeader.number);
+            _this2.currentBlockNumber = blockHeader.number;
+            if (Number(latestRange.end) + 1 === blockHeader.number) {
+              $r.lsetAsync('scannedRanges', 0, JSON.stringify({
+                start: latestRange.start,
+                end: blockHeader.number
+              }));
+            } else if (Number(latestRange.end) === blockHeader.number) {
+              // replace an exsist block, should do nothing   
+            } else {
+              await $r.lpushAsync('scannedRanges', JSON.stringify({
+                start: blockHeader.number,
+                end: blockHeader.number
+              }));
+              if (_this2.fillStopped) {
+                _this2.fillMissingBlocks();
+              }
+            }
+          });
+          _this2.getConfirmations(blockHeader.number);
+        }
+      });
+    }
+  }, {
+    key: 'fillMissingBlocks',
+    value: async function fillMissingBlocks() {
+      var _this3 = this;
+
+      this.fillStopped = false;
+      var earliestRangeString = await $r.lindexAsync('scannedRanges', -1);
+      var earliestRange = JSON.parse(earliestRangeString);
+      var nextRangeString = await $r.lindexAsync('scannedRanges', -2);
+
+      if (nextRangeString) {
+        var nextRange = JSON.parse(nextRangeString);
+        var missingBlockCount = nextRange.start - (earliestRange.end + 1);
+        var shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
+
+        await Promise.all(new Array(shouldReqCount).fill(1).map(function (item, index) {
+          return new Promise(function (resolve) {
+            _this3.scanETHBlock(earliestRange.end + 1 + index, function () {
+              resolve();
+            });
+          });
+        }));
+
+        if (earliestRange.end + shouldReqCount + 1 === nextRange.start) {
+          // After the promise resolved, nextRange could be changed by another functions
+          var newNextRange = JSON.parse((await $r.lindexAsync('scannedRanges', -2)));
+
+          await $r.multi().lset('scannedRanges', -2, JSON.stringify({
+            start: earliestRange.start,
+            end: newNextRange.end
+          })).lrem('scannedRanges', -1, earliestRangeString).execAsync();
+        } else {
+          await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
+            start: earliestRange.start,
+            end: earliestRange.end + shouldReqCount
+          }));
+        }
+
+        this.fillMissingBlocks();
+      } else {
+        this.fillStopped = true;
+      }
+    }
+  }, {
+    key: 'watch',
+    value: function watch(_ref2) {
+      var coinType = _ref2.coinType,
+          receiver = _ref2.receiver,
+          contract = _ref2.contract,
+          _ref2$confirmationsRe = _ref2.confirmationsRequired,
+          confirmationsRequired = _ref2$confirmationsRe === undefined ? 12 : _ref2$confirmationsRe;
+
+      $r.saddAsync('watchList', JSON.stringify({
+        coinType: coinType.toUpperCase(),
+        receiver: receiver.toLowerCase(),
+        contract: contract ? contract.toLowerCase() : undefined,
+        confirmationsRequired: confirmationsRequired
+      }));
+    }
+  }, {
+    key: 'scanETHBlock',
+    value: async function scanETHBlock(blockNumber, callback) {
+      var _this4 = this;
+
+      var block = await this.web3.eth.getBlock(blockNumber, true);
+      var watchList = await $r.smembersAsync('watchList');
+
+      await Promise.all(block.transactions.map(function (tx) {
+        return new Promise(async function (resolve) {
+          var _watchTransaction2 = _this4.watchTransaction({
+            tx: tx,
+            timestamp: block.timestamp,
+            watchList: watchList
+          }),
+              resultTx = _watchTransaction2.resultTx,
+              watchString = _watchTransaction2.watchString;
+
+          if (resultTx && watchString) {
+            var txReceipt = await _this4.web3.eth.getTransactionReceipt(resultTx.hash);
+
+            if (txReceipt && txReceipt.status === '0x1') {
+              _this4.incomeCallback(resultTx);
+              if (resultTx.confirmations >= resultTx.confirmationsRequired) {
+                $r.sremAsync('watchList', watchString);
+              } else {
+                $r.multi().sadd('metTxs', JSON.stringify(resultTx)).srem('watchList', watchString).execAsync();
+              }
+            }
+          }
+          resolve();
+        });
+      }));
+
+      console.log('scanETHBlock', blockNumber);
+      callback();
+    }
+  }, {
+    key: 'watchTransaction',
+    value: function watchTransaction(_ref3) {
+      var tx = _ref3.tx,
+          timestamp = _ref3.timestamp,
+          watchList = _ref3.watchList;
+
+      var watchResult = {};
+      var txSpecialWrapper = timestamp ? {
+        timestamp: timestamp,
+        blockNumber: tx.blockNumber,
+        confirmations: this.currentBlockNumber - tx.blockNumber
+      } : {};
+
+      if (tx.from) {
+        tx.from = tx.from.toLowerCase();
+      }
+      if (tx.to) {
+        tx.to = tx.to.toLowerCase();
+      }
+      tx.hash = tx.hash.toLowerCase();
+      watchList.forEach(function (watchString) {
+        var watchItem = JSON.parse(watchString);
+
+        if (watchItem.coinType === 'ETH') {
+          if (watchItem.receiver === tx.to) {
+            watchResult.watchString = watchString;
+            watchResult.resultTx = Object.assign({
               hash: tx.hash,
               from: tx.from,
-              to: '0x' + inputData.inputs[0],
-              value: inputData.inputs[1].toString(10),
-              blockNumber: tx.blockNumber,
-              timeStamp: tx.timeStamp,
-              confirmations: tx.confirmations
-            } : null;
-          }).filter(function (tx) {
-            return tx && tx.to.toLowerCase() === walletId.toLowerCase();
-          });
+              to: tx.to,
+              coinType: watchItem.coinType,
+              value: tx.value,
+              confirmationsRequired: watchItem.confirmationsRequired
+            }, txSpecialWrapper);
+          }
+        } else if (watchItem.coinType === 'ERCTOKEN' && tx.to === watchItem.contract) {
+          if (tx.input !== '0x') {
+            var inputData = decoder.decodeData(tx.input);
 
-          if (_txs.length > 0) {
-            var _totalValue = _txs.reduce(function (value, tx) {
-              return value + Number(tx.value);
-            }, 0);
-            var _currentBlock = _txs[0].blockNumber;
-            var _minConfirmations = Number(_txs[0].confirmations);
+            if (inputData.name === 'transfer') {
+              var inputTo = ('0x' + inputData.inputs[0]).toLowerCase();
 
-            callback(null, {
-              totalValue: _totalValue,
-              currentBlock: _currentBlock,
-              minConfirmations: _minConfirmations,
-              decimals: erc20DecimalsMap[contractAddr],
-              txs: _txs.map(function (tx) {
-                return {
+              if (watchItem.receiver === inputTo) {
+                watchResult.watchString = watchString;
+                watchResult.resultTx = Object.assign({
                   hash: tx.hash,
                   from: tx.from,
-                  to: tx.to,
-                  value: tx.value,
-                  blockNumber: tx.blockNumber,
-                  timeStamp: tx.timeStamp,
-                  confirmations: tx.confirmations
-                };
-              })
-            });
-          } else {
-            callback(null, { empty: true });
+                  to: inputTo,
+                  coinType: watchItem.coinType,
+                  value: inputData.inputs[1].toString(10),
+                  confirmationsRequired: watchItem.confirmationsRequired
+                }, txSpecialWrapper);
+              }
+            }
           }
-        } else {
-          callback({ error: 'coinType is not supported' });
         }
-      } else {
-        callback(null, { empty: true });
-      }
-    });
-  }], function (error) {
-    console.log('error', error);
-    return getIncome({
-      walletId: walletId,
-      startBlock: startBlock,
-      coinType: coinType,
-      callback: callback,
-      contractAddr: contractAddr,
-      net: net
-    });
-  });
-}
+      });
+      return watchResult;
+    }
+  }, {
+    key: 'getConfirmations',
+    value: async function getConfirmations(currentBlockNumber) {
+      var _this5 = this;
 
-function getBlockNumber() {
-  var net = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 'mainnet';
+      var metTxs = await $r.smembersAsync('metTxs');
 
-  var web3 = web3Map[net];
+      metTxs.forEach(async function (metTxString) {
+        var metTx = JSON.parse(metTxString);
+        var txReceipt = await _this5.web3.eth.getTransactionReceipt(metTx.hash);
 
-  return web3.eth.getBlockNumber();
-}
+        if (txReceipt && txReceipt.status === '0x1') {
+          var confirmations = currentBlockNumber - txReceipt.blockNumber + 1;
+          var newMetTX = Object.assign({}, metTx, { confirmations: confirmations });
+
+          _this5.incomeCallback(newMetTX);
+          // console.log('type', typeof confirmations, typeof metTx.confirmationsRequired);
+          // console.log('equal', confirmations === metTx.confirmationsRequired);
+          if (confirmations >= metTx.confirmationsRequired) {
+            console.log('remove!!');
+            await $r.sremAsync('metTxs', metTxString);
+            console.log('removed!!');
+          } else {
+            $r.multi().srem('metTxs', metTxString).sadd('metTxs', JSON.stringify(newMetTX)).execAsync();
+          }
+        }
+      });
+    }
+  }]);
+
+  return CryptoIncome;
+}();
+
+exports.default = CryptoIncome;
+
+
+var $ci = new CryptoIncome();
+
+$ci.init({
+  ETHnet: 'ws://35.194.131.204:8546',
+  startBlockNum: 3145525,
+  fillingReqQuantity: 20,
+  incomeCallback: function incomeCallback(tx) {
+    return console.log('mytx', tx);
+  },
+  pendingCallback: function pendingCallback(tx) {
+    return console.log('pending', tx);
+  }
+});
+
+$ci.watch({
+  coinType: 'ETH',
+  receiver: '0x9D9A658139B3615CE1C042bD7069E8e025edFC2e'
+});
+
+$ci.watch({
+  coinType: 'ERCTOKEN',
+  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
+  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
+  confirmationsRequired: 7
+});
