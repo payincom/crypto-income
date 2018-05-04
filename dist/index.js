@@ -319,30 +319,3 @@ var CryptoIncome = function () {
 }();
 
 exports.default = CryptoIncome;
-
-
-var $ci = new CryptoIncome();
-
-$ci.init({
-  ETHnet: 'ws://35.194.131.204:8546',
-  startBlockNum: 3145525,
-  fillingReqQuantity: 20,
-  incomeCallback: function incomeCallback(tx) {
-    return console.log('mytx', tx);
-  },
-  pendingCallback: function pendingCallback(tx) {
-    return console.log('pending', tx);
-  }
-});
-
-$ci.watch({
-  coinType: 'ETH',
-  receiver: '0x9D9A658139B3615CE1C042bD7069E8e025edFC2e'
-});
-
-$ci.watch({
-  coinType: 'ERCTOKEN',
-  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
-  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
-  confirmationsRequired: 7
-});
