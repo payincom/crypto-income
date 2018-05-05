@@ -63,7 +63,6 @@ var CryptoIncome = function () {
       }
       this.subscribeNewBlocks();
       this.subscribePendingTx();
-      this.fillMissingBlocks();
     }
   }, {
     key: 'subscribePendingTx',
@@ -75,7 +74,6 @@ var CryptoIncome = function () {
           console.log(error);
         }
       }).on('data', async function (txHash) {
-        // console.log('pendingTransaction', txHash);
         var watchList = await $r.smembersAsync('watchList');
         var tx = await _this.web3.eth.getTransaction(txHash);
 
@@ -105,9 +103,8 @@ var CryptoIncome = function () {
         if (blockHeader) {
           var latestRange = JSON.parse((await $r.lindexAsync('scannedRanges', 0)));
 
+          _this2.currentBlockNumber = blockHeader.number;
           _this2.scanETHBlock(blockHeader.number, async function () {
-            console.log('blockNumber', blockHeader.number);
-            _this2.currentBlockNumber = blockHeader.number;
             if (Number(latestRange.end) + 1 === blockHeader.number) {
               $r.lsetAsync('scannedRanges', 0, JSON.stringify({
                 start: latestRange.start,
@@ -120,7 +117,7 @@ var CryptoIncome = function () {
                 start: blockHeader.number,
                 end: blockHeader.number
               }));
-              if (_this2.fillStopped) {
+              if (!_this2.fillStarted) {
                 _this2.fillMissingBlocks();
               }
             }
@@ -135,6 +132,7 @@ var CryptoIncome = function () {
       var _this3 = this;
 
       this.fillStopped = false;
+      this.fillStarted = true;
       var earliestRangeString = await $r.lindexAsync('scannedRanges', -1);
       var earliestRange = JSON.parse(earliestRangeString);
       var nextRangeString = await $r.lindexAsync('scannedRanges', -2);
@@ -170,6 +168,7 @@ var CryptoIncome = function () {
         this.fillMissingBlocks();
       } else {
         this.fillStopped = true;
+        this.fillStarted = false;
       }
     }
   }, {
@@ -178,6 +177,7 @@ var CryptoIncome = function () {
       var coinType = _ref2.coinType,
           receiver = _ref2.receiver,
           contract = _ref2.contract,
+          willExpireIn = _ref2.willExpireIn,
           _ref2$confirmationsRe = _ref2.confirmationsRequired,
           confirmationsRequired = _ref2$confirmationsRe === undefined ? 12 : _ref2$confirmationsRe;
 
@@ -185,7 +185,8 @@ var CryptoIncome = function () {
         coinType: coinType.toUpperCase(),
         receiver: receiver.toLowerCase(),
         contract: contract ? contract.toLowerCase() : undefined,
-        confirmationsRequired: confirmationsRequired
+        confirmationsRequired: confirmationsRequired,
+        willExpireAt: Math.ceil(Date.now() / 1000) + willExpireIn
       }));
     }
   }, {
@@ -209,12 +210,10 @@ var CryptoIncome = function () {
           if (resultTx && watchString) {
             var txReceipt = await _this4.web3.eth.getTransactionReceipt(resultTx.hash);
 
-            if (txReceipt && txReceipt.status === '0x1') {
+            if (txReceipt && txReceipt.status) {
               _this4.incomeCallback(resultTx);
-              if (resultTx.confirmations >= resultTx.confirmationsRequired) {
-                $r.sremAsync('watchList', watchString);
-              } else {
-                $r.multi().sadd('metTxs', JSON.stringify(resultTx)).srem('watchList', watchString).execAsync();
+              if (resultTx.confirmations < resultTx.confirmationsRequired) {
+                $r.saddAsync('metTxs', JSON.stringify(resultTx));
               }
             }
           }
@@ -222,12 +221,13 @@ var CryptoIncome = function () {
         });
       }));
 
-      console.log('scanETHBlock', blockNumber);
       callback();
     }
   }, {
     key: 'watchTransaction',
     value: function watchTransaction(_ref3) {
+      var _this5 = this;
+
       var tx = _ref3.tx,
           timestamp = _ref3.timestamp,
           watchList = _ref3.watchList;
@@ -236,7 +236,7 @@ var CryptoIncome = function () {
       var txSpecialWrapper = timestamp ? {
         timestamp: timestamp,
         blockNumber: tx.blockNumber,
-        confirmations: this.currentBlockNumber - tx.blockNumber
+        confirmations: this.currentBlockNumber - tx.blockNumber + 1
       } : {};
 
       if (tx.from) {
@@ -246,6 +246,7 @@ var CryptoIncome = function () {
         tx.to = tx.to.toLowerCase();
       }
       tx.hash = tx.hash.toLowerCase();
+
       watchList.forEach(function (watchString) {
         var watchItem = JSON.parse(watchString);
 
@@ -282,31 +283,31 @@ var CryptoIncome = function () {
             }
           }
         }
+
+        if (_this5.fillStopped && timestamp && watchItem.willExpireAt < timestamp) {
+          $r.sremAsync('watchList', watchString);
+        }
       });
       return watchResult;
     }
   }, {
     key: 'getConfirmations',
     value: async function getConfirmations(currentBlockNumber) {
-      var _this5 = this;
+      var _this6 = this;
 
       var metTxs = await $r.smembersAsync('metTxs');
 
       metTxs.forEach(async function (metTxString) {
         var metTx = JSON.parse(metTxString);
-        var txReceipt = await _this5.web3.eth.getTransactionReceipt(metTx.hash);
+        var txReceipt = await _this6.web3.eth.getTransactionReceipt(metTx.hash);
 
-        if (txReceipt && txReceipt.status === '0x1') {
+        if (txReceipt && txReceipt.status) {
           var confirmations = currentBlockNumber - txReceipt.blockNumber + 1;
           var newMetTX = Object.assign({}, metTx, { confirmations: confirmations });
 
-          _this5.incomeCallback(newMetTX);
-          // console.log('type', typeof confirmations, typeof metTx.confirmationsRequired);
-          // console.log('equal', confirmations === metTx.confirmationsRequired);
+          _this6.incomeCallback(newMetTX);
           if (confirmations >= metTx.confirmationsRequired) {
-            console.log('remove!!');
             await $r.sremAsync('metTxs', metTxString);
-            console.log('removed!!');
           } else {
             $r.multi().srem('metTxs', metTxString).sadd('metTxs', JSON.stringify(newMetTX)).execAsync();
           }

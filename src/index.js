@@ -35,7 +35,6 @@ export default class CryptoIncome {
     }
     this.subscribeNewBlocks();
     this.subscribePendingTx();
-    this.fillMissingBlocks();
   }
 
   subscribePendingTx() {
@@ -44,7 +43,6 @@ export default class CryptoIncome {
         console.log(error);
       }     
     }).on('data', async (txHash) => {
-      // console.log('pendingTransaction', txHash);
       const watchList = await $r.smembersAsync('watchList');
       const tx = await this.web3.eth.getTransaction(txHash);
 
@@ -70,9 +68,8 @@ export default class CryptoIncome {
       if (blockHeader) {
         const latestRange = JSON.parse(await $r.lindexAsync('scannedRanges', 0));
 
+        this.currentBlockNumber = blockHeader.number;
         this.scanETHBlock(blockHeader.number, async () => {
-          console.log('blockNumber', blockHeader.number);
-          this.currentBlockNumber = blockHeader.number;
           if (Number(latestRange.end) + 1 === blockHeader.number) {
             $r.lsetAsync('scannedRanges', 0, JSON.stringify({
               start: latestRange.start,
@@ -85,7 +82,7 @@ export default class CryptoIncome {
               start: blockHeader.number,
               end: blockHeader.number,
             }));
-            if (this.fillStopped) {
+            if (!this.fillStarted) {
               this.fillMissingBlocks();
             }
           }
@@ -97,6 +94,7 @@ export default class CryptoIncome {
 
   async fillMissingBlocks() {
     this.fillStopped = false;
+    this.fillStarted = true;
     const earliestRangeString = await $r.lindexAsync('scannedRanges', -1);
     const earliestRange = JSON.parse(earliestRangeString);
     const nextRangeString = await $r.lindexAsync('scannedRanges', -2);
@@ -135,6 +133,7 @@ export default class CryptoIncome {
       this.fillMissingBlocks();
     } else {
       this.fillStopped = true;
+      this.fillStarted = false;
     }
   }
 
@@ -142,6 +141,7 @@ export default class CryptoIncome {
     coinType,
     receiver, // address
     contract,
+    willExpireIn,
     confirmationsRequired = 12,
   }){
     $r.saddAsync('watchList', JSON.stringify({
@@ -149,6 +149,7 @@ export default class CryptoIncome {
       receiver: receiver.toLowerCase(),
       contract: contract ? contract.toLowerCase() : undefined,
       confirmationsRequired,
+      willExpireAt: Math.ceil(Date.now() / 1000) + willExpireIn,
     }));
   }
 
@@ -166,22 +167,16 @@ export default class CryptoIncome {
       if (resultTx && watchString) {
         const txReceipt = await this.web3.eth.getTransactionReceipt(resultTx.hash);
 
-        if (txReceipt && txReceipt.status === '0x1') {
+        if (txReceipt && txReceipt.status) {
           this.incomeCallback(resultTx);
-          if (resultTx.confirmations >= resultTx.confirmationsRequired) {          
-            $r.sremAsync('watchList', watchString);
-          } else {
-            $r.multi()
-            .sadd('metTxs', JSON.stringify(resultTx))
-            .srem('watchList', watchString)
-            .execAsync();
+          if (resultTx.confirmations < resultTx.confirmationsRequired) {
+            $r.saddAsync('metTxs', JSON.stringify(resultTx));
           }
         }
       }
       resolve();
     })));
 
-    console.log('scanETHBlock', blockNumber);
     callback();
   }
 
@@ -190,7 +185,7 @@ export default class CryptoIncome {
     const txSpecialWrapper = timestamp ? {
       timestamp,
       blockNumber: tx.blockNumber,
-      confirmations: this.currentBlockNumber - tx.blockNumber,
+      confirmations: this.currentBlockNumber - tx.blockNumber + 1,
     } : {};
 
     if (tx.from) {
@@ -200,6 +195,7 @@ export default class CryptoIncome {
       tx.to = tx.to.toLowerCase();
     }
     tx.hash = tx.hash.toLowerCase();
+
     watchList.forEach((watchString) => {
       const watchItem = JSON.parse(watchString);
 
@@ -236,6 +232,10 @@ export default class CryptoIncome {
           }
         }
       }
+
+      if (this.fillStopped && timestamp && watchItem.willExpireAt < timestamp) {
+        $r.sremAsync('watchList', watchString);
+      }
     });
     return watchResult;
   }
@@ -247,17 +247,13 @@ export default class CryptoIncome {
       const metTx = JSON.parse(metTxString);
       const txReceipt = await this.web3.eth.getTransactionReceipt(metTx.hash);
 
-      if (txReceipt && txReceipt.status === '0x1') {
+      if (txReceipt && txReceipt.status) {
         const confirmations = currentBlockNumber - txReceipt.blockNumber + 1;
         const newMetTX = Object.assign({}, metTx, { confirmations });
 
         this.incomeCallback(newMetTX);
-        // console.log('type', typeof confirmations, typeof metTx.confirmationsRequired);
-        // console.log('equal', confirmations === metTx.confirmationsRequired);
         if (confirmations >= metTx.confirmationsRequired) {
-          console.log('remove!!');
           await $r.sremAsync('metTxs', metTxString);
-          console.log('removed!!');
         } else {
           $r.multi()
           .srem('metTxs', metTxString)
@@ -268,3 +264,4 @@ export default class CryptoIncome {
     });
   }
 }
+

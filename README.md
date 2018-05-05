@@ -28,6 +28,7 @@ $ci.init({
 $ci.watch({
   coinType: 'ETH',
   receiver: '0x9D9A658139B3615CE1C042bD7069E8e025edFC2e',
+  willExpireIn: 15 * 60, // seconds
 });
 
 // Add ERCTOKEN income watcher
@@ -36,6 +37,7 @@ $ci.watch({
   receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
   contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
   confirmationsRequired: 7, // default is 12
+  willExpireIn: 15 * 60, // seconds
 });
 ```
 
