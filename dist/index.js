@@ -136,7 +136,9 @@ var CryptoIncome = function () {
               console.log('+++++latest-set', latestRange.start, blockHeader.number);
               $r.watch('scannedRanges');
               $r.lindex('scannedRanges', 0, function (err, dataString) {
-                console.log('err', err);
+                if (err) {
+                  console.log('err', err);
+                }
                 var data = void 0;
                 if (dataString) {
                   data = JSON.parse(dataString);
@@ -177,7 +179,7 @@ var CryptoIncome = function () {
 
       if (nextRangeString) {
         var nextRange = JSON.parse(nextRangeString);
-        var missingBlockCount = nextRange.start - (earliestRange.end + 1);
+        var missingBlockCount = Math.max(nextRange.start - (earliestRange.end + 1), 0);
         var shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
         await Promise.all(new Array(shouldReqCount).fill(1).map(function (item, index) {
           return new Promise(function (resolve) {
@@ -357,26 +359,3 @@ var CryptoIncome = function () {
 }();
 
 exports.default = CryptoIncome;
-
-
-var $ci = new CryptoIncome();
-
-$ci.init({
-  ETHnet: 'ws://35.201.203.250:8546',
-  startBlockNum: 3273282,
-  fillingReqQuantity: 20,
-  incomeCallback: function incomeCallback(tx) {
-    console.log('income', tx);
-  },
-  pendingCallback: function pendingCallback(tx) {
-    console.log('tx pending detected', tx);
-  }
-});
-
-$ci.watch({
-  coinType: 'ERCTOKEN',
-  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
-  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
-  confirmationsRequired: 2,
-  willExpireIn: 60 * 60
-});

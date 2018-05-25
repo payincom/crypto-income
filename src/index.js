@@ -97,7 +97,9 @@ export default class CryptoIncome {
             console.log('+++++latest-set', latestRange.start, blockHeader.number);
             $r.watch('scannedRanges');
             $r.lindex('scannedRanges', 0, (err, dataString) => {
-              console.log('err', err);
+              if (err) {
+                console.log('err', err);
+              }
               let data;
               if (dataString) {
                 data = JSON.parse(dataString);
@@ -136,7 +138,7 @@ export default class CryptoIncome {
 
     if (nextRangeString) {
       const nextRange = JSON.parse(nextRangeString);
-      const missingBlockCount = nextRange.start - (earliestRange.end + 1);
+      const missingBlockCount = Math.max(nextRange.start - (earliestRange.end + 1), 0);
       const shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
       await Promise.all(new Array(shouldReqCount).fill(1)
         .map((item, index) => new Promise((resolve) => {
