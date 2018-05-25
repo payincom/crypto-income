@@ -45,13 +45,37 @@ var CryptoIncome = function () {
   _createClass(CryptoIncome, [{
     key: 'init',
     value: async function init(_ref) {
+      var _this = this;
+
       var ETHnet = _ref.ETHnet,
           startBlockNum = _ref.startBlockNum,
           fillingReqQuantity = _ref.fillingReqQuantity,
           incomeCallback = _ref.incomeCallback,
           pendingCallback = _ref.pendingCallback;
 
-      this.web3 = new _web2.default(new _web2.default.providers.WebsocketProvider(ETHnet));
+      var originProvider = new _web2.default.providers.WebsocketProvider(ETHnet);
+      this.web3 = new _web2.default(originProvider);
+      var reConnectWhenError = function reConnectWhenError(provider) {
+        provider.on('error', function (e) {
+          return console.log('WS Error', e);
+        });
+        provider.on('end', function () {
+          console.log('WS closed');
+          var timer = setInterval(function () {
+            console.log('Attempting to reconnect...');
+            var newProvider = new _web2.default.providers.WebsocketProvider(ETHnet);
+
+            newProvider.on('connect', function () {
+              console.log('WSS Reconnected');
+              clearInterval(timer);
+              _this.web3.setProvider(newProvider);
+              reConnectWhenError(newProvider);
+            });
+          }, 2000);
+        });
+      };
+
+      reConnectWhenError(originProvider);
       this.fillingReqQuantity = fillingReqQuantity;
       this.incomeCallback = incomeCallback;
       this.pendingCallback = pendingCallback;
@@ -67,7 +91,7 @@ var CryptoIncome = function () {
   }, {
     key: 'subscribePendingTx',
     value: function subscribePendingTx() {
-      var _this = this;
+      var _this2 = this;
 
       this.web3.eth.subscribe('pendingTransactions', function (error) {
         if (error) {
@@ -75,17 +99,17 @@ var CryptoIncome = function () {
         }
       }).on('data', async function (txHash) {
         var watchList = await $r.smembersAsync('watchList');
-        var tx = await _this.web3.eth.getTransaction(txHash);
+        var tx = await _this2.web3.eth.getTransaction(txHash);
 
         if (tx) {
-          var _watchTransaction = _this.watchTransaction({
+          var _watchTransaction = _this2.watchTransaction({
             tx: tx,
             watchList: watchList
           }),
               resultTx = _watchTransaction.resultTx;
 
           if (resultTx) {
-            _this.pendingCallback(resultTx);
+            _this2.pendingCallback(resultTx);
           }
         }
       });
@@ -93,7 +117,7 @@ var CryptoIncome = function () {
   }, {
     key: 'subscribeNewBlocks',
     value: function subscribeNewBlocks() {
-      var _this2 = this;
+      var _this3 = this;
 
       this.web3.eth.subscribe('newBlockHeaders', function (error) {
         if (error) {
@@ -103,8 +127,8 @@ var CryptoIncome = function () {
         if (blockHeader) {
           var latestRange = JSON.parse((await $r.lindexAsync('scannedRanges', 0)));
 
-          _this2.currentBlockNumber = blockHeader.number;
-          _this2.scanETHBlock(blockHeader.number, async function () {
+          _this3.currentBlockNumber = blockHeader.number;
+          _this3.scanETHBlock(blockHeader.number, async function () {
             if (Number(latestRange.end) + 1 === blockHeader.number) {
               $r.lsetAsync('scannedRanges', 0, JSON.stringify({
                 start: latestRange.start,
@@ -117,19 +141,19 @@ var CryptoIncome = function () {
                 start: blockHeader.number,
                 end: blockHeader.number
               }));
-              if (!_this2.fillStarted) {
-                _this2.fillMissingBlocks();
-              }
+            }
+            if (!_this3.fillStarted) {
+              _this3.fillMissingBlocks();
             }
           });
-          _this2.getConfirmations(blockHeader.number);
+          _this3.getConfirmations(blockHeader.number);
         }
       });
     }
   }, {
     key: 'fillMissingBlocks',
     value: async function fillMissingBlocks() {
-      var _this3 = this;
+      var _this4 = this;
 
       this.fillStopped = false;
       this.fillStarted = true;
@@ -141,10 +165,11 @@ var CryptoIncome = function () {
         var nextRange = JSON.parse(nextRangeString);
         var missingBlockCount = nextRange.start - (earliestRange.end + 1);
         var shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
-
+        console.log(':::::::::::', this.fillingReqQuantity, missingBlockCount);
+        console.log('...........', shouldReqCount);
         await Promise.all(new Array(shouldReqCount).fill(1).map(function (item, index) {
           return new Promise(function (resolve) {
-            _this3.scanETHBlock(earliestRange.end + 1 + index, function () {
+            _this4.scanETHBlock(earliestRange.end + 1 + index, function () {
               resolve();
             });
           });
@@ -154,17 +179,18 @@ var CryptoIncome = function () {
           // After the promise resolved, nextRange could be changed by another functions
           var newNextRange = JSON.parse((await $r.lindexAsync('scannedRanges', -2)));
 
+          console.log('startxxxxxxxxend', earliestRange.start, newNextRange.end);
           await $r.multi().lset('scannedRanges', -2, JSON.stringify({
             start: earliestRange.start,
             end: newNextRange.end
           })).lrem('scannedRanges', -1, earliestRangeString).execAsync();
         } else {
+          console.log('start-end', earliestRange.start, earliestRange.end + shouldReqCount);
           await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
             start: earliestRange.start,
             end: earliestRange.end + shouldReqCount
           }));
         }
-
         this.fillMissingBlocks();
       } else {
         this.fillStopped = true;
@@ -192,14 +218,14 @@ var CryptoIncome = function () {
   }, {
     key: 'scanETHBlock',
     value: async function scanETHBlock(blockNumber, callback) {
-      var _this4 = this;
+      var _this5 = this;
 
       var block = await this.web3.eth.getBlock(blockNumber, true);
       var watchList = await $r.smembersAsync('watchList');
 
       await Promise.all(block.transactions.map(function (tx) {
         return new Promise(async function (resolve) {
-          var _watchTransaction2 = _this4.watchTransaction({
+          var _watchTransaction2 = _this5.watchTransaction({
             tx: tx,
             timestamp: block.timestamp,
             watchList: watchList
@@ -208,10 +234,10 @@ var CryptoIncome = function () {
               watchString = _watchTransaction2.watchString;
 
           if (resultTx && watchString) {
-            var txReceipt = await _this4.web3.eth.getTransactionReceipt(resultTx.hash);
+            var txReceipt = await _this5.web3.eth.getTransactionReceipt(resultTx.hash);
 
             if (txReceipt && txReceipt.status) {
-              _this4.incomeCallback(resultTx);
+              _this5.incomeCallback(resultTx);
               if (resultTx.confirmations < resultTx.confirmationsRequired) {
                 $r.saddAsync('metTxs', JSON.stringify(resultTx));
               }
@@ -226,7 +252,7 @@ var CryptoIncome = function () {
   }, {
     key: 'watchTransaction',
     value: function watchTransaction(_ref3) {
-      var _this5 = this;
+      var _this6 = this;
 
       var tx = _ref3.tx,
           timestamp = _ref3.timestamp,
@@ -284,7 +310,7 @@ var CryptoIncome = function () {
           }
         }
 
-        if (_this5.fillStopped && timestamp && watchItem.willExpireAt < timestamp) {
+        if (_this6.fillStopped && timestamp && watchItem.willExpireAt < timestamp) {
           $r.sremAsync('watchList', watchString);
         }
       });
@@ -293,19 +319,19 @@ var CryptoIncome = function () {
   }, {
     key: 'getConfirmations',
     value: async function getConfirmations(currentBlockNumber) {
-      var _this6 = this;
+      var _this7 = this;
 
       var metTxs = await $r.smembersAsync('metTxs');
 
       metTxs.forEach(async function (metTxString) {
         var metTx = JSON.parse(metTxString);
-        var txReceipt = await _this6.web3.eth.getTransactionReceipt(metTx.hash);
+        var txReceipt = await _this7.web3.eth.getTransactionReceipt(metTx.hash);
 
         if (txReceipt && txReceipt.status) {
           var confirmations = currentBlockNumber - txReceipt.blockNumber + 1;
           var newMetTX = Object.assign({}, metTx, { confirmations: confirmations });
 
-          _this6.incomeCallback(newMetTX);
+          _this7.incomeCallback(newMetTX);
           if (confirmations >= metTx.confirmationsRequired) {
             await $r.sremAsync('metTxs', metTxString);
           } else {
@@ -320,3 +346,26 @@ var CryptoIncome = function () {
 }();
 
 exports.default = CryptoIncome;
+
+
+var $ci = new CryptoIncome();
+
+$ci.init({
+  ETHnet: 'ws://35.201.203.250:8546',
+  startBlockNum: 3303941,
+  fillingReqQuantity: 20,
+  incomeCallback: function incomeCallback(tx) {
+    console.log('income', tx);
+  },
+  pendingCallback: function pendingCallback(tx) {
+    console.log('tx pending detected', tx);
+  }
+});
+
+$ci.watch({
+  coinType: 'ERCTOKEN',
+  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
+  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
+  confirmationsRequired: 2,
+  willExpireIn: 60 * 60
+});

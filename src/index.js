@@ -23,7 +23,27 @@ export default class CryptoIncome {
     incomeCallback,
     pendingCallback,
   }) {
-    this.web3 = new Web3(new Web3.providers.WebsocketProvider(ETHnet));
+    const originProvider = new Web3.providers.WebsocketProvider(ETHnet);
+    this.web3 = new Web3(originProvider);
+    const reConnectWhenError = (provider) => {
+      provider.on('error', e => console.log('WS Error', e));
+      provider.on('end', () => {
+        console.log('WS closed');
+        const timer = setInterval(() => {
+          console.log('Attempting to reconnect...');
+          const newProvider = new Web3.providers.WebsocketProvider(ETHnet);
+
+          newProvider.on('connect', () => {
+            console.log('WSS Reconnected');
+            clearInterval(timer);
+            this.web3.setProvider(newProvider);
+            reConnectWhenError(newProvider);
+          });
+        }, 2000);
+      });
+    };
+
+    reConnectWhenError(originProvider);
     this.fillingReqQuantity = fillingReqQuantity;
     this.incomeCallback = incomeCallback;
     this.pendingCallback = pendingCallback;
@@ -82,9 +102,9 @@ export default class CryptoIncome {
               start: blockHeader.number,
               end: blockHeader.number,
             }));
-            if (!this.fillStarted) {
-              this.fillMissingBlocks();
-            }
+          }
+          if (!this.fillStarted) {
+            this.fillMissingBlocks();
           }
         });
         this.getConfirmations(blockHeader.number);
@@ -103,7 +123,8 @@ export default class CryptoIncome {
       const nextRange = JSON.parse(nextRangeString);
       const missingBlockCount = nextRange.start - (earliestRange.end + 1);
       const shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
-
+      console.log(':::::::::::', this.fillingReqQuantity, missingBlockCount);
+      console.log('...........', shouldReqCount);
       await Promise.all(new Array(shouldReqCount).fill(1)
         .map((item, index) => new Promise((resolve) => {
           this.scanETHBlock(earliestRange.end + 1 + index, () => {
@@ -116,6 +137,7 @@ export default class CryptoIncome {
         // After the promise resolved, nextRange could be changed by another functions
         const newNextRange = JSON.parse(await $r.lindexAsync('scannedRanges', -2));
 
+        console.log('startxxxxxxxxend', earliestRange.start, newNextRange.end);
         await $r.multi()
         .lset('scannedRanges', -2, JSON.stringify({
           start: earliestRange.start,
@@ -124,12 +146,12 @@ export default class CryptoIncome {
         .lrem('scannedRanges', -1, earliestRangeString)
         .execAsync();
       } else {
+        console.log('start-end', earliestRange.start, earliestRange.end + shouldReqCount);
         await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
           start: earliestRange.start,
           end: earliestRange.end + shouldReqCount,
         }));
       }
-
       this.fillMissingBlocks();
     } else {
       this.fillStopped = true;
@@ -264,4 +286,26 @@ export default class CryptoIncome {
     });
   }
 }
+
+const $ci = new CryptoIncome();
+
+$ci.init({
+  ETHnet: 'ws://35.201.203.250:8546',
+  startBlockNum: 3303941,
+  fillingReqQuantity: 20,
+  incomeCallback: (tx) => {
+    console.log('income', tx);
+  },
+  pendingCallback: tx => {
+    console.log('tx pending detected', tx);
+  },
+});
+
+$ci.watch({
+  coinType: 'ERCTOKEN',
+  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
+  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
+  confirmationsRequired: 2,
+  willExpireIn: 60 * 60,
+});
 
