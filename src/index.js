@@ -48,6 +48,7 @@ export default class CryptoIncome {
     this.incomeCallback = incomeCallback;
     this.pendingCallback = pendingCallback;
     if (!await $r.lindexAsync('scannedRanges', 0)) {
+      console.log('init ranges');
       await $r.lpushAsync('scannedRanges', JSON.stringify({
         start: startBlockNum - 1,
         end: startBlockNum - 1,
@@ -87,17 +88,31 @@ export default class CryptoIncome {
     }).on('data', async (blockHeader) => {
       if (blockHeader) {
         const latestRange = JSON.parse(await $r.lindexAsync('scannedRanges', 0));
-
+        if (this.currentBlockNumber >= blockHeader.number) {
+          console.log('desc', this.currentBlockNumber, blockHeader.number);
+        }
         this.currentBlockNumber = blockHeader.number;
         this.scanETHBlock(blockHeader.number, async () => {
           if (Number(latestRange.end) + 1 === blockHeader.number) {
-            $r.lsetAsync('scannedRanges', 0, JSON.stringify({
-              start: latestRange.start,
-              end: blockHeader.number,
-            }));
+            console.log('+++++latest-set', latestRange.start, blockHeader.number);
+            $r.watch('scannedRanges');
+            $r.lindex('scannedRanges', 0, (err, dataString) => {
+              console.log('err', err);
+              let data;
+              if (dataString) {
+                data = JSON.parse(dataString);
+              }
+              $r.multi().lset('scannedRanges', 0, JSON.stringify({
+                start: data.start,
+                end: blockHeader.number,
+              }))
+              .exec();
+            });
           } else if (Number(latestRange.end) === blockHeader.number) {
+            console.log('equal======');
             // replace an exsist block, should do nothing   
           } else {
+            console.log('add ranges', blockHeader.number);
             await $r.lpushAsync('scannedRanges', JSON.stringify({
               start: blockHeader.number,
               end: blockHeader.number,
@@ -123,8 +138,6 @@ export default class CryptoIncome {
       const nextRange = JSON.parse(nextRangeString);
       const missingBlockCount = nextRange.start - (earliestRange.end + 1);
       const shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
-      console.log(':::::::::::', this.fillingReqQuantity, missingBlockCount);
-      console.log('...........', shouldReqCount);
       await Promise.all(new Array(shouldReqCount).fill(1)
         .map((item, index) => new Promise((resolve) => {
           this.scanETHBlock(earliestRange.end + 1 + index, () => {
@@ -137,7 +150,7 @@ export default class CryptoIncome {
         // After the promise resolved, nextRange could be changed by another functions
         const newNextRange = JSON.parse(await $r.lindexAsync('scannedRanges', -2));
 
-        console.log('startxxxxxxxxend', earliestRange.start, newNextRange.end);
+        console.log('combine range', earliestRange.start, newNextRange.end);
         await $r.multi()
         .lset('scannedRanges', -2, JSON.stringify({
           start: earliestRange.start,
@@ -146,7 +159,6 @@ export default class CryptoIncome {
         .lrem('scannedRanges', -1, earliestRangeString)
         .execAsync();
       } else {
-        console.log('start-end', earliestRange.start, earliestRange.end + shouldReqCount);
         await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
           start: earliestRange.start,
           end: earliestRange.end + shouldReqCount,
@@ -286,26 +298,3 @@ export default class CryptoIncome {
     });
   }
 }
-
-const $ci = new CryptoIncome();
-
-$ci.init({
-  ETHnet: 'ws://35.201.203.250:8546',
-  startBlockNum: 3303941,
-  fillingReqQuantity: 20,
-  incomeCallback: (tx) => {
-    console.log('income', tx);
-  },
-  pendingCallback: tx => {
-    console.log('tx pending detected', tx);
-  },
-});
-
-$ci.watch({
-  coinType: 'ERCTOKEN',
-  receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
-  contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
-  confirmationsRequired: 2,
-  willExpireIn: 60 * 60,
-});
-

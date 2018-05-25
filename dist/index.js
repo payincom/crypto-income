@@ -80,6 +80,7 @@ var CryptoIncome = function () {
       this.incomeCallback = incomeCallback;
       this.pendingCallback = pendingCallback;
       if (!(await $r.lindexAsync('scannedRanges', 0))) {
+        console.log('init ranges');
         await $r.lpushAsync('scannedRanges', JSON.stringify({
           start: startBlockNum - 1,
           end: startBlockNum - 1
@@ -126,17 +127,30 @@ var CryptoIncome = function () {
       }).on('data', async function (blockHeader) {
         if (blockHeader) {
           var latestRange = JSON.parse((await $r.lindexAsync('scannedRanges', 0)));
-
+          if (_this3.currentBlockNumber >= blockHeader.number) {
+            console.log('desc', _this3.currentBlockNumber, blockHeader.number);
+          }
           _this3.currentBlockNumber = blockHeader.number;
           _this3.scanETHBlock(blockHeader.number, async function () {
             if (Number(latestRange.end) + 1 === blockHeader.number) {
-              $r.lsetAsync('scannedRanges', 0, JSON.stringify({
-                start: latestRange.start,
-                end: blockHeader.number
-              }));
+              console.log('+++++latest-set', latestRange.start, blockHeader.number);
+              $r.watch('scannedRanges');
+              $r.lindex('scannedRanges', 0, function (err, dataString) {
+                console.log('err', err);
+                var data = void 0;
+                if (dataString) {
+                  data = JSON.parse(dataString);
+                }
+                $r.multi().lset('scannedRanges', 0, JSON.stringify({
+                  start: data.start,
+                  end: blockHeader.number
+                })).exec();
+              });
             } else if (Number(latestRange.end) === blockHeader.number) {
+              console.log('equal======');
               // replace an exsist block, should do nothing   
             } else {
+              console.log('add ranges', blockHeader.number);
               await $r.lpushAsync('scannedRanges', JSON.stringify({
                 start: blockHeader.number,
                 end: blockHeader.number
@@ -165,8 +179,6 @@ var CryptoIncome = function () {
         var nextRange = JSON.parse(nextRangeString);
         var missingBlockCount = nextRange.start - (earliestRange.end + 1);
         var shouldReqCount = Math.min(this.fillingReqQuantity, missingBlockCount);
-        console.log(':::::::::::', this.fillingReqQuantity, missingBlockCount);
-        console.log('...........', shouldReqCount);
         await Promise.all(new Array(shouldReqCount).fill(1).map(function (item, index) {
           return new Promise(function (resolve) {
             _this4.scanETHBlock(earliestRange.end + 1 + index, function () {
@@ -179,13 +191,12 @@ var CryptoIncome = function () {
           // After the promise resolved, nextRange could be changed by another functions
           var newNextRange = JSON.parse((await $r.lindexAsync('scannedRanges', -2)));
 
-          console.log('startxxxxxxxxend', earliestRange.start, newNextRange.end);
+          console.log('combine range', earliestRange.start, newNextRange.end);
           await $r.multi().lset('scannedRanges', -2, JSON.stringify({
             start: earliestRange.start,
             end: newNextRange.end
           })).lrem('scannedRanges', -1, earliestRangeString).execAsync();
         } else {
-          console.log('start-end', earliestRange.start, earliestRange.end + shouldReqCount);
           await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
             start: earliestRange.start,
             end: earliestRange.end + shouldReqCount
@@ -352,7 +363,7 @@ var $ci = new CryptoIncome();
 
 $ci.init({
   ETHnet: 'ws://35.201.203.250:8546',
-  startBlockNum: 3303941,
+  startBlockNum: 3273282,
   fillingReqQuantity: 20,
   incomeCallback: function incomeCallback(tx) {
     console.log('income', tx);
