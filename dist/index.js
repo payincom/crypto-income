@@ -73,6 +73,8 @@ var CryptoIncome = function () {
             });
           }, 2000);
         });
+        _this.subscribeNewBlocks();
+        _this.subscribePendingTx();
       };
 
       reConnectWhenError(originProvider);
@@ -86,8 +88,6 @@ var CryptoIncome = function () {
           end: startBlockNum - 1
         }));
       }
-      this.subscribeNewBlocks();
-      this.subscribePendingTx();
     }
   }, {
     key: 'subscribePendingTx',

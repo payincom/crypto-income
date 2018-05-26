@@ -41,6 +41,8 @@ export default class CryptoIncome {
           });
         }, 2000);
       });
+      this.subscribeNewBlocks();
+      this.subscribePendingTx();
     };
 
     reConnectWhenError(originProvider);
@@ -54,8 +56,6 @@ export default class CryptoIncome {
         end: startBlockNum - 1,
       }));
     }
-    this.subscribeNewBlocks();
-    this.subscribePendingTx();
   }
 
   subscribePendingTx() {
