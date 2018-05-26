@@ -161,6 +161,10 @@ export default class CryptoIncome {
         .lrem('scannedRanges', -1, earliestRangeString)
         .execAsync();
       } else {
+        if (earliestRange.end + shouldReqCount + 1 > nextRange.start) {
+          console.log('overflow!', earliestRange.end, shouldReqCount, nextRange.start);
+          console.log('detail', this.fillingReqQuantity, missingBlockCount);
+        }
         await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
           start: earliestRange.start,
           end: earliestRange.end + shouldReqCount,
@@ -190,6 +194,7 @@ export default class CryptoIncome {
   }
 
   async scanETHBlock(blockNumber, callback) {
+    console.log('blockNumber', blockNumber);
     const block = await this.web3.eth.getBlock(blockNumber, true);
     const watchList = await $r.smembersAsync('watchList');
 
@@ -300,3 +305,25 @@ export default class CryptoIncome {
     });
   }
 }
+
+// const $ci = new CryptoIncome();
+
+// $ci.init({
+//   ETHnet: 'ws://35.201.203.250:8546',
+//   startBlockNum: 3303941,
+//   fillingReqQuantity: 20,
+//   incomeCallback: (tx) => {
+//     console.log('income', tx);
+//   },
+//   pendingCallback: tx => {
+//     console.log('tx pending detected', tx);
+//   },
+// });
+
+// $ci.watch({
+//   coinType: 'ERCTOKEN',
+//   receiver: '0xd3DcFc3278fAEdB1B35250eb2953024dE85131e2',
+//   contract: '0xC9d344dAA04A1cA0fcCBDFdF19DDC674c0648615',
+//   confirmationsRequired: 2,
+//   willExpireIn: 60 * 60,
+// });
