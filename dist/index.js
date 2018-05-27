@@ -189,20 +189,23 @@ var CryptoIncome = function () {
           });
         }));
 
+        var newNextRange = JSON.parse((await $r.lindexAsync('scannedRanges', -2)));
+
         if (earliestRange.end + shouldReqCount + 1 === nextRange.start) {
           // After the promise resolved, nextRange could be changed by another functions
-          var newNextRange = JSON.parse((await $r.lindexAsync('scannedRanges', -2)));
 
           console.log('combine range', earliestRange.start, newNextRange.end);
           await $r.multi().lset('scannedRanges', -2, JSON.stringify({
             start: earliestRange.start,
             end: newNextRange.end
           })).lrem('scannedRanges', -1, earliestRangeString).execAsync();
+        } else if (earliestRange.end + shouldReqCount + 1 > nextRange.start) {
+          console.log('combine overflow', earliestRange.start, newNextRange.end);
+          await $r.multi().lset('scannedRanges', -2, JSON.stringify({
+            start: earliestRange.start,
+            end: earliestRange.end
+          })).lrem('scannedRanges', -1, earliestRangeString).execAsync();
         } else {
-          if (earliestRange.end + shouldReqCount + 1 > nextRange.start) {
-            console.log('overflow!', earliestRange.end, shouldReqCount, nextRange.start);
-            console.log('detail', this.fillingReqQuantity, missingBlockCount);
-          }
           await $r.lsetAsync('scannedRanges', -1, JSON.stringify({
             start: earliestRange.start,
             end: earliestRange.end + shouldReqCount
