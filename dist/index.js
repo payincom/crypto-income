@@ -62,6 +62,7 @@ var CryptoIncome = function () {
       (0, _bluebird.promisifyAll)(_redis2.default.Multi.prototype);
 
       var originProvider = new _web2.default.providers.WebsocketProvider(ETHnet);
+
       this.web3 = new _web2.default(originProvider);
       var reConnectWhenError = function reConnectWhenError(provider) {
         provider.on('error', function (e) {
