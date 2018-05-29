@@ -22,6 +22,8 @@ $ci.init({
   fillingReqQuantity: 20,
   incomeCallback: tx => console.log('mytx', tx),
   pendingCallback: tx => console.log('pending', tx),
+  redisPort: xxxx,
+  redisHost: xx.xx.xx.xx,
 });
 
 // Add ETH income watcher

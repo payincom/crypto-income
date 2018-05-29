@@ -28,14 +28,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 var decoder = new _ethereumInputDataDecoder2.default(_constant.erc20Abi);
 
-var $r = _redis2.default.createClient();
-
-$r.on('error', function (err) {
-  console.log('Error ' + err);
-});
-
-(0, _bluebird.promisifyAll)(_redis2.default.RedisClient.prototype);
-(0, _bluebird.promisifyAll)(_redis2.default.Multi.prototype);
+var $r = void 0;
 
 var CryptoIncome = function () {
   function CryptoIncome() {
@@ -51,7 +44,22 @@ var CryptoIncome = function () {
           startBlockNum = _ref.startBlockNum,
           fillingReqQuantity = _ref.fillingReqQuantity,
           incomeCallback = _ref.incomeCallback,
-          pendingCallback = _ref.pendingCallback;
+          pendingCallback = _ref.pendingCallback,
+          redisPort = _ref.redisPort,
+          redisHost = _ref.redisHost;
+
+      if (redisPort && redisHost) {
+        $r = _redis2.default.createClient(redisPort, redisHost);
+      } else {
+        $r = _redis2.default.createClient();
+      }
+
+      $r.on('error', function (err) {
+        console.log('Error ' + err);
+      });
+
+      (0, _bluebird.promisifyAll)(_redis2.default.RedisClient.prototype);
+      (0, _bluebird.promisifyAll)(_redis2.default.Multi.prototype);
 
       var originProvider = new _web2.default.providers.WebsocketProvider(ETHnet);
       this.web3 = new _web2.default(originProvider);
@@ -366,7 +374,10 @@ var CryptoIncome = function () {
   return CryptoIncome;
 }();
 
-// const $ci = new CryptoIncome();
+exports.default = CryptoIncome;
+
+
+var $ci = new CryptoIncome();
 
 // $ci.init({
 //   ETHnet: 'ws://35.201.203.250:8546',
@@ -378,6 +389,8 @@ var CryptoIncome = function () {
 //   pendingCallback: tx => {
 //     console.log('tx pending detected', tx);
 //   },
+//   redisPort: 32771,
+//   redisHost: '35.200.86.57',
 // });
 
 // $ci.watch({
@@ -387,6 +400,3 @@ var CryptoIncome = function () {
 //   confirmationsRequired: 2,
 //   willExpireIn: 60 * 60,
 // });
-
-
-exports.default = CryptoIncome;

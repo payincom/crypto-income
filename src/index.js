@@ -6,14 +6,7 @@ import redis from 'redis';
 
 const decoder = new InputDataDecoder(erc20Abi);
 
-const $r = redis.createClient();
-
-$r.on('error', function (err) {
-  console.log('Error ' + err);
-});
-
-promisifyAll(redis.RedisClient.prototype);
-promisifyAll(redis.Multi.prototype);
+let $r;
 
 export default class CryptoIncome {
   async init({
@@ -22,7 +15,22 @@ export default class CryptoIncome {
     fillingReqQuantity,
     incomeCallback,
     pendingCallback,
+    redisPort,
+    redisHost
   }) {
+    if (redisPort && redisHost) {
+      $r = redis.createClient(redisPort, redisHost);
+    } else {
+      $r = redis.createClient();
+    }
+
+    $r.on('error', function (err) {
+      console.log('Error ' + err);
+    });
+
+    promisifyAll(redis.RedisClient.prototype);
+    promisifyAll(redis.Multi.prototype);
+
     const originProvider = new Web3.providers.WebsocketProvider(ETHnet);
     this.web3 = new Web3(originProvider);
     const reConnectWhenError = (provider) => {
@@ -312,7 +320,7 @@ export default class CryptoIncome {
   }
 }
 
-// const $ci = new CryptoIncome();
+const $ci = new CryptoIncome();
 
 // $ci.init({
 //   ETHnet: 'ws://35.201.203.250:8546',
@@ -324,6 +332,8 @@ export default class CryptoIncome {
 //   pendingCallback: tx => {
 //     console.log('tx pending detected', tx);
 //   },
+//   redisPort: 32771,
+//   redisHost: '35.200.86.57',
 // });
 
 // $ci.watch({
