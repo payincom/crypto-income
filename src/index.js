@@ -32,6 +32,7 @@ export default class CryptoIncome {
     promisifyAll(redis.Multi.prototype);
 
     const originProvider = new Web3.providers.WebsocketProvider(ETHnet);
+
     this.web3 = new Web3(originProvider);
     const reConnectWhenError = (provider) => {
       provider.on('error', e => console.log('WS Error', e));
