@@ -58,12 +58,28 @@ export default class CryptoIncome {
     this.fillingReqQuantity = fillingReqQuantity;
     this.incomeCallback = incomeCallback;
     this.pendingCallback = pendingCallback;
-    if (!await $r.lindexAsync('scannedRanges', 0)) {
-      console.log('init ranges');
-      await $r.lpushAsync('scannedRanges', JSON.stringify({
-        start: startBlockNum - 1,
-        end: startBlockNum - 1,
-      }));
+    try {
+      const stblockNumber = startBlockNum || await this.web3.eth.getBlockNumber();
+
+      if (!await $r.lindexAsync('scannedRanges', 0)) {
+        console.log('init ranges');
+        await $r.lpushAsync('scannedRanges', JSON.stringify({
+          start: stblockNumber - 1,
+          end: stblockNumber - 1,
+        }));
+      }
+    } catch (err) {
+      console.log('err', err);
+      console.log('re-init');
+      this.init({
+        ETHnet,
+        startBlockNum,
+        fillingReqQuantity,
+        incomeCallback,
+        pendingCallback,
+        redisPort,
+        redisHost
+      });
     }
   }
 
@@ -321,7 +337,7 @@ export default class CryptoIncome {
   }
 }
 
-const $ci = new CryptoIncome();
+// const $ci = new CryptoIncome();
 
 // $ci.init({
 //   ETHnet: 'ws://35.201.203.250:8546',

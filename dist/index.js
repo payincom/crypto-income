@@ -90,12 +90,28 @@ var CryptoIncome = function () {
       this.fillingReqQuantity = fillingReqQuantity;
       this.incomeCallback = incomeCallback;
       this.pendingCallback = pendingCallback;
-      if (!(await $r.lindexAsync('scannedRanges', 0))) {
-        console.log('init ranges');
-        await $r.lpushAsync('scannedRanges', JSON.stringify({
-          start: startBlockNum - 1,
-          end: startBlockNum - 1
-        }));
+      try {
+        var stblockNumber = startBlockNum || (await this.web3.eth.getBlockNumber());
+
+        if (!(await $r.lindexAsync('scannedRanges', 0))) {
+          console.log('init ranges');
+          await $r.lpushAsync('scannedRanges', JSON.stringify({
+            start: stblockNumber - 1,
+            end: stblockNumber - 1
+          }));
+        }
+      } catch (err) {
+        console.log('err', err);
+        console.log('re-init');
+        this.init({
+          ETHnet: ETHnet,
+          startBlockNum: startBlockNum,
+          fillingReqQuantity: fillingReqQuantity,
+          incomeCallback: incomeCallback,
+          pendingCallback: pendingCallback,
+          redisPort: redisPort,
+          redisHost: redisHost
+        });
       }
     }
   }, {
@@ -375,10 +391,7 @@ var CryptoIncome = function () {
   return CryptoIncome;
 }();
 
-exports.default = CryptoIncome;
-
-
-var $ci = new CryptoIncome();
+// const $ci = new CryptoIncome();
 
 // $ci.init({
 //   ETHnet: 'ws://35.201.203.250:8546',
@@ -401,3 +414,6 @@ var $ci = new CryptoIncome();
 //   confirmationsRequired: 2,
 //   willExpireIn: 60 * 60,
 // });
+
+
+exports.default = CryptoIncome;
