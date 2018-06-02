@@ -152,13 +152,12 @@ var CryptoIncome = function () {
       }).on('data', async function (blockHeader) {
         if (blockHeader) {
           var latestRange = JSON.parse((await $r.lindexAsync('scannedRanges', 0)));
-          if (_this3.currentBlockNumber >= blockHeader.number) {
-            console.log('desc', _this3.currentBlockNumber, blockHeader.number);
-          }
+          // if (this.currentBlockNumber >= blockHeader.number) {
+          //   console.log('desc', this.currentBlockNumber, blockHeader.number);
+          // }
           _this3.currentBlockNumber = blockHeader.number;
           _this3.scanETHBlock(blockHeader.number, async function () {
             if (Number(latestRange.end) + 1 === blockHeader.number) {
-              console.log('+++++latest-set', latestRange.start, blockHeader.number);
               $r.watch('scannedRanges');
               $r.lindex('scannedRanges', 0, function (err, dataString) {
                 if (err) {
@@ -265,7 +264,6 @@ var CryptoIncome = function () {
     value: async function scanETHBlock(blockNumber, callback) {
       var _this5 = this;
 
-      console.log('blockNumber', blockNumber);
       var block = await this.web3.eth.getBlock(blockNumber, true);
       var watchList = await $r.smembersAsync('watchList');
 
